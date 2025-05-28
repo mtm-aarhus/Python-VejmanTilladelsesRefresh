@@ -7,7 +7,6 @@ import json
 import pyodbc
 from datetime import datetime
 import time
-import os
 
 
 # pylint: disable-next=unused-argument
