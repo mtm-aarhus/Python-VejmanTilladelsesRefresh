@@ -12,7 +12,7 @@ sql_credentials = orchestrator_connection.get_credential("AzureSQL")
 sql_user = sql_credentials.username
 sql_password = sql_credentials.password
 sql_server = orchestrator_connection.get_constant("VejmanHistorikSQL").value
-# 
+
 json_data_source_url = orchestrator_connection.get_constant("CartoVejman").value
 azure_sql_connection_string = (
     f"Driver={{ODBC Driver 17 for SQL Server}};"
@@ -53,7 +53,24 @@ cursor = conn.cursor()
 
 json_object = json.loads(json_data)
 rows = json_object.get("rows", [])
+# Define MERGE statement
+merge_sql = """
+MERGE Materielopstilling AS target
+USING (SELECT ? AS roadwork_id, ? AS changedate, ? AS streetname, ? AS type_name, ? AS startdate, ? AS enddate, ? AS the_geom) AS source
+ON target.roadwork_id = source.roadwork_id
+WHEN MATCHED THEN
+    UPDATE SET changedate = source.changedate,
+               streetname = source.streetname,
+               type_name = source.type_name,
+               startdate = source.startdate,
+               enddate = source.enddate,
+               the_geom = source.the_geom
+WHEN NOT MATCHED THEN
+    INSERT (roadwork_id, changedate, streetname, type_name, startdate, enddate, the_geom)
+    VALUES (source.roadwork_id, source.changedate, source.streetname, source.type_name, source.startdate, source.enddate, source.the_geom);
+"""
 
+# Process rows
 for item in rows:
     roadwork_id = str(item.get("roadwork_id"))
     change_date = datetime.fromisoformat(item.get("changedate"))
@@ -69,23 +86,19 @@ for item in rows:
     if reference_data and isinstance(reference_data, list) and reference_data[0].get("streetname"):
         streetname = reference_data[0]["streetname"]
 
-    # Check if record exists
-    cursor.execute("SELECT COUNT(*) FROM Materielopstilling WHERE roadwork_id = ?", roadwork_id)
-    existing_row_count = cursor.fetchone()[0]
+    # Execute merge
+    cursor.execute(
+        merge_sql,
+        roadwork_id,
+        change_date,
+        streetname,
+        type_name,
+        start_date,
+        end_date,
+        the_geom
+    )
 
-    if existing_row_count > 0:
-        cursor.execute("""
-            UPDATE Materielopstilling
-            SET changedate = ?, streetname = ?, type_name = ?, startdate = ?, enddate = ?, the_geom = ?
-            WHERE roadwork_id = ?
-        """, change_date, streetname, type_name, start_date, end_date, the_geom, roadwork_id)
-    else:
-        cursor.execute("""
-            INSERT INTO Materielopstilling
-            (roadwork_id, changedate, streetname, type_name, startdate, enddate, the_geom)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, roadwork_id, change_date, streetname, type_name, start_date, end_date, the_geom)
-
+# Commit changes
 conn.commit()
 cursor.close()
 conn.close()
