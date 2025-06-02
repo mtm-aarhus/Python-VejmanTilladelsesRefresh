@@ -53,8 +53,19 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
                 raise
 
     # Continue if JSON fetched successfully
-    conn = pyodbc.connect(azure_sql_connection_string)
-    cursor = conn.cursor()
+    for attempt in range(1, max_retries + 1):
+        try:
+            print(f"Attempt {attempt} to connect to SQL Server...")
+            conn = pyodbc.connect(azure_sql_connection_string, timeout=60)
+            cursor = conn.cursor()
+            break
+        except pyodbc.OperationalError as e:
+            print(f"SQL connection failed (attempt {attempt}/{max_retries}): {e}")
+            if attempt < max_retries:
+                print(f"Retrying in {retry_delay_seconds} seconds...")
+                time.sleep(retry_delay_seconds)
+            else:
+                raise
 
     json_object = json.loads(json_data)
     rows = json_object.get("rows", [])
