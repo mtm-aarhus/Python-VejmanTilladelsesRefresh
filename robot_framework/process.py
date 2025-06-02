@@ -38,31 +38,31 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
     # Retry HTTP request
     for attempt in range(1, max_retries + 1):
         try:
-            print(f"Attempt {attempt} to fetch JSON data...")
+            orchestrator_connection.log_info(f"Attempt {attempt} to fetch JSON data...")
             response = requests.get(json_data_source_url)
             response.raise_for_status()
             json_data = response.text
             break
         except requests.exceptions.RequestException as e:
-            print(f"HTTP request failed (attempt {attempt}/{max_retries}): {e}")
+            orchestrator_connection.log_info(f"HTTP request failed (attempt {attempt}/{max_retries}): {e}")
             if attempt < max_retries:
-                print(f"Retrying in {retry_delay_seconds // 60} minutes...")
+                orchestrator_connection.log_info(f"Retrying in {retry_delay_seconds // 60} minutes...")
                 time.sleep(retry_delay_seconds)
             else:
-                print("Max retries reached. Exiting.")
+                orchestrator_connection.log_info("Max retries reached. Exiting.")
                 raise
 
     # Continue if JSON fetched successfully
     for attempt in range(1, max_retries + 1):
         try:
-            print(f"Attempt {attempt} to connect to SQL Server...")
+            orchestrator_connection.log_info(f"Attempt {attempt} to connect to SQL Server...")
             conn = pyodbc.connect(azure_sql_connection_string, timeout=60)
             cursor = conn.cursor()
             break
         except pyodbc.OperationalError as e:
-            print(f"SQL connection failed (attempt {attempt}/{max_retries}): {e}")
+            orchestrator_connection.log_info(f"SQL connection failed (attempt {attempt}/{max_retries}): {e}")
             if attempt < max_retries:
-                print(f"Retrying in {retry_delay_seconds} seconds...")
+                orchestrator_connection.log_info(f"Retrying in {retry_delay_seconds} seconds...")
                 time.sleep(retry_delay_seconds)
             else:
                 raise
